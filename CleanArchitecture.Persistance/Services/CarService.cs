@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
+using CleanArchitecture.Application.Common.Pagination;
 using CleanArchitecture.Application.Features.CarFeatures.Commands.CreateCar;
 using CleanArchitecture.Application.Features.CarFeatures.Queries.GetAllCar;
 using CleanArchitecture.Application.Services;
 using CleanArchitecture.Domain.Entities;
 using CleanArchitecture.Domain.Repositories;
+using CleanArchitecture.Domain.Shared.Pagination;
 using CleanArchitecture.Persistance.Context;
 using GenericRepository;
 using Microsoft.EntityFrameworkCore;
@@ -36,9 +38,25 @@ public sealed class CarService : ICarService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IList<Car>> GetAllAsync(GetAllCarQuery request, CancellationToken cancellationToken)
+    public async Task<PaginatedResult<Car>> GetAllAsync(GetAllCarQuery request, CancellationToken cancellationToken)
     {
-        IList<Car> cars = await _carRepository.GetAll().ToListAsync(cancellationToken);
-        return cars;
+        var query = _carRepository.GetAll().AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+            query = query.Where(p => EF.Functions.Like(p.Name, $"%{request.Search}%"));
+
+        var sortableWhitelist = new[] { "Name", "EnginePower", "Id" };
+
+        return await query.ToPaginatedResultAsync(
+            pageNumber: request.PageNumber,
+            pageSize: request.PageSize,
+            ct: cancellationToken,
+            sortableWhitelist: sortableWhitelist,
+            defaultSortBy: "Id",                    // entity'nde yoksa uygun bir alan ver: "CreatedDate" gibi
+            defaultDesc: false,
+            sortBy: null,
+            desc: true,
+            includeTotalCount: true
+        );
     }
 }
